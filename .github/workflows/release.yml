@@ -30,24 +30,10 @@ jobs:
         # traced native modules for the runner's OS/arch, so there is no
         # cross-compiling. A row may also need a "deps" step below (Linux:
         # webkit2gtk etc.).
+        # This copy ships Windows only. The upstream project also built
+        # macOS (needs its helper signing certificate) and Linux rows; they
+        # are in the git history (before 0.11.0) if they are needed again.
         include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            label: macos-arm64
-          # Intel Macs. macos-13 was retired in December 2025; macos-15-intel
-          # is GitHub's x64 macOS image until August 2027.
-          - platform: macos-15-intel
-            target: x86_64-apple-darwin
-            label: macos-x64
-          # ubuntu-22.04 for an older glibc, so the AppImage and .deb run on
-          # more distributions (Debian 12+, Ubuntu 22.04+, Fedora, Arch...).
-          - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            label: linux-x64
-          # 64-bit Raspberry Pi OS and other ARM boards.
-          - platform: ubuntu-22.04-arm
-            target: aarch64-unknown-linux-gnu
-            label: linux-arm64
           # NSIS setup .exe (per-user, no admin) and .msi (per-machine)
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
@@ -203,93 +189,50 @@ jobs:
           releaseDraft: true
           prerelease: false
           releaseBody: |
-            Download the file for your computer below. You still need
-            [iperf3](https://iperf.fr/iperf-download.php) on this computer
-            and another one on your network to measure throughput; signal
-            strength works without it.
+            **What's new:** see the Version __VERSION__ section of
+            `CHANGELOG.md` in this repository.
 
-            | Computer | File |
+            | Installed with | Use |
             |---|---|
-            | Mac with Apple silicon (M1 and later) | `WiFi.Heatmapper_*_aarch64.dmg` |
-            | Mac with an Intel processor | `WiFi.Heatmapper_*_x64.dmg` |
-            | Windows 10 or 11 (64-bit) | `WiFi.Heatmapper_*_x64-setup.exe` |
-            | Windows, installed for all users (needs admin) | `WiFi.Heatmapper_*_x64_en-US.msi` |
+            | the setup `.exe` (per user, no admin) | `WiFi.Heatmapper_*_x64-setup.exe` |
+            | the `.msi` (all users, needs admin) | `WiFi.Heatmapper_*_x64_en-US.msi` |
 
-            **Early builds.** The desktop apps are new. They are built and
-            started automatically, but so far only the macOS app has been used
-            on a real computer.
-            [What has been tested](https://wifi-heatmapper.danielalder.cz/docs/install#what-has-been-tested)
-            · [Tell us how it went](https://github.com/hnykda/wifi-heatmapper/issues/new?template=desktop-app-report.md)
-            · [Install guide](https://wifi-heatmapper.danielalder.cz/docs/install)
+            Use the same kind of installer as before. If you're not sure:
+            Settings → Apps → WiFi Heatmapper shows where it is installed
+            (`%LOCALAPPDATA%` for the setup `.exe`, Program Files for the
+            `.msi`).
 
-            **These builds are not signed.** Your computer will warn you the
-            first time you open the app.
+            **Updating (no uninstall needed)**
 
-            **macOS:** open the `.dmg` and drag WiFi Heatmapper to
-            Applications. Open it once; when macOS says it cannot verify the
-            app, click Done, then go to System Settings → Privacy & Security,
-            scroll down and click **Open Anyway**. Or, in Terminal:
+            1. Close WiFi Heatmapper.
+            2. Recommended: copy the folder
+               `%LOCALAPPDATA%\com.github.hnykda.wifi-heatmapper\data`
+               somewhere safe. It holds your surveys, floor plans and
+               report details; the update doesn't touch it.
+            3. Run the new installer. When Windows SmartScreen says it
+               protected your PC, click **More info**, then **Run anyway**
+               (these builds are not code-signed).
+            4. Open the app and check your surveys are there and the
+               About dialog ("i" button) shows __VERSION__.
 
-            ```
-            xattr -dr com.apple.quarantine "/Applications/WiFi Heatmapper.app"
-            ```
+            **Wi-Fi details on Windows 11 24H2 and later:** turn on
+            Settings → Privacy & security → Location → **Location services**
+            and **Let desktop apps access your location**. Without it Windows
+            hides the BSSID, and the access point map has nothing to show.
+            For speed tests, iperf3 must be on your PATH.
 
-            Or with Homebrew, within a day of this release:
-            `brew install --cask hnykda/tap/wifi-heatmapper`
+            **Going back to the previous version**
 
-            When the app offers it above the floor plan (or in Settings),
-            click **Allow Location access**: macOS asks
-            whether **"WiFi Heatmapper Helper"** may use your location. The
-            helper is the part of the app that
-            reads Wi-Fi signal, and macOS only tells apps with Location
-            access the name of your network. Your location itself is not
-            used. You are asked once; updates keep the answer. If you say
-            no, measurements still work, without the network name.
+            1. Keep the previous version's installer.
+            2. Setup `.exe`: run the previous installer over this one.
+               `.msi`: uninstall this version first, then install the
+               previous one.
+            3. Restore the `data` folder you copied in step 2 above. The
+               previous version doesn't know this version's new survey
+               details and drops them when it saves a survey.
 
-            Your surveys and floor plans are kept in
-            `~/Library/Application Support/com.github.hnykda.wifi-heatmapper/data`.
-
-            **Linux** (x64 and 64-bit ARM such as a Raspberry Pi 4/5):
-
-            | Linux | File |
-            |---|---|
-            | Ubuntu, Debian, Linux Mint (x64) | `WiFi.Heatmapper_*_amd64.deb` |
-            | Raspberry Pi OS 64-bit, Ubuntu, Debian (ARM64) | `WiFi.Heatmapper_*_arm64.deb` |
-            | Any other distribution (x64) | `WiFi.Heatmapper_*_amd64.AppImage` |
-            | Any other distribution (ARM64) | `WiFi.Heatmapper_*_aarch64.AppImage` |
-
-            Install the `.deb` with `sudo apt install ./WiFi.Heatmapper_*.deb`
-            (it suggests `iw`, `iperf3` and `network-manager`) and start
-            WiFi Heatmapper from the app menu. Or make the `.AppImage`
-            executable and run it:
-
-            ```
-            chmod +x WiFi.Heatmapper_*.AppImage
-            ./WiFi.Heatmapper_*.AppImage
-            ```
-
-            AppImages need FUSE 2: on Ubuntu 24.04 and later run
-            `sudo apt install libfuse2t64` first (older Ubuntu: `libfuse2`).
-            Reading the Wi-Fi signal uses `iw`; on most systems it needs no
-            password, otherwise the app asks for your sudo password.
-            Your surveys and floor plans are kept in
-            `~/.local/share/com.github.hnykda.wifi-heatmapper/data`.
-
-            **Windows:** run the setup `.exe`. When Windows SmartScreen says
-            it protected your PC, click **More info**, then **Run anyway**.
-            The app installs for your user only and needs no admin rights
-            (the `.msi` installs for everyone on the computer instead).
-
-            On Windows 11 24H2 and later, Windows only shares Wi-Fi details
-            with apps allowed to use your location. Open Settings → Privacy
-            & security → Location and turn on **Location services** and
-            **Let desktop apps access your location**. iperf3 must be on your
-            PATH, for example via `scoop install iperf3` or
-            `choco install iperf3`.
-
-            Your surveys and floor plans are kept in
-            `%LOCALAPPDATA%\com.github.hnykda.wifi-heatmapper\data`, and the
-            log in `%LOCALAPPDATA%\com.github.hnykda.wifi-heatmapper\logs`.
+            Logs are in
+            `%LOCALAPPDATA%\com.github.hnykda.wifi-heatmapper\logs`.
 
       # The Wi-Fi helper must come out of Tauri's bundling with its own
       # signature intact: Tauri signs only the outer app, without --deep.

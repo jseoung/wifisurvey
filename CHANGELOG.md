@@ -2,7 +2,7 @@
 
 _This section follows the precepts of [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) so that future readers can understand the state and evolution of the project._
 
-## Unreleased
+## Version 0.11.0 - 2026-11-24
 
 ### Added
 
@@ -46,6 +46,10 @@ _This section follows the precepts of [Keep a Changelog](https://keepachangelog.
   editable .docx. The company name and logo are kept once for the app
   (`data/report-profile.json`), the rest with each survey. **Suggest from
   the findings** drafts recommendations. Adds the `docx` package.
+
+### Security
+
+* Next.js updated to 16.4.6 (`npm audit fix`).
 
 ### Changed
 
