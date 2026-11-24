@@ -48,11 +48,36 @@ import { mediaUrlFor } from "./media-url";
 import { migrateMeasurementMode } from "./measurement-mode";
 import { cleanPointLabel, POINT_LABEL_MAX } from "./point-label";
 import {
+  ACCESS_POINT_BSSIDS_MAX,
+  ACCESS_POINT_CHANNELS_MAX,
+  ACCESS_POINT_MODEL_MAX,
   ACCESS_POINT_NAME_MAX,
   ACCESS_POINT_NOTE_MAX,
+  ACCESS_POINT_SSID_MAX,
   ACCESS_POINTS_MAX,
+  AP_BANDS,
+  CHANNEL_MAX,
   cleanAccessPointNote,
+  cleanBandList,
+  cleanBssidList,
+  cleanChannelList,
+  cleanOptionalText,
+  compactAccessPoint,
 } from "./access-points";
+import { isValidApPattern } from "./apName";
+import { AP_LAYERS, defaultApView, HIDDEN_APS_MAX } from "./ap-view";
+import {
+  COMPANY_NAME_MAX,
+  defaultReportInfo,
+  defaultReportProfile,
+  LOGO_DATA_URL,
+  LOGO_MAX_BYTES,
+  REPORT_LONG_FIELDS,
+  REPORT_LONG_MAX,
+  REPORT_SHORT_FIELDS,
+  REPORT_SHORT_MAX,
+  type ReportInfo,
+} from "./report-info";
 import { COPY_PART_NAMES, type CopyPart } from "./survey-ops";
 import type { Gradient, HeatmapKey, HeatmapRanges } from "./types";
 
@@ -145,7 +170,7 @@ export interface WifiResults {
   txRate: number;
   phyMode: string;
   channelWidth: number;
-  band: number; // frequency band - 2.4 or 5 (GHz)
+  band: number; // frequency band in GHz: 2.4, 5 or 6; 0 if unknown
   currentSSID: boolean; // true if this is the SSID currently in use
   strongestSSID: WifiResults | null;
 }
@@ -247,9 +272,89 @@ const accessPointFields = {
       `a note is at most ${ACCESS_POINT_NOTE_MAX} characters`,
     )
     .optional(),
+  /** optional manufacturer and model ("Ubiquiti U6 Pro") */
+  model: z
+    .string()
+    .trim()
+    .max(
+      ACCESS_POINT_MODEL_MAX,
+      `a model is at most ${ACCESS_POINT_MODEL_MAX} characters`,
+    )
+    .optional(),
+  /** optional network name it broadcasts */
+  ssid: z
+    .string()
+    .trim()
+    .max(
+      ACCESS_POINT_SSID_MAX,
+      `an SSID is at most ${ACCESS_POINT_SSID_MAX} characters`,
+    )
+    .optional(),
+  /**
+   * The BSSIDs (one per radio or network) that belong to this access
+   * point, or prefixes ending in "*". Measurements connected to one of
+   * them are counted as this access point (ap-association.ts).
+   */
+  bssids: z
+    .array(
+      z.string().refine(isValidApPattern, {
+        error:
+          "must be a MAC address such as 9e:05:d6:96:e8:30, or a prefix ending in * such as 9e:05:d6:96:e8:*",
+      }),
+    )
+    .max(ACCESS_POINT_BSSIDS_MAX)
+    .transform(cleanBssidList)
+    .optional(),
+  /** bands it uses, in GHz */
+  bands: z
+    .array(
+      z.number().refine((b) => (AP_BANDS as readonly number[]).includes(b), {
+        error: "a band is 2.4, 5 or 6",
+      }),
+    )
+    .max(AP_BANDS.length)
+    .transform(cleanBandList)
+    .optional(),
+  /** channels it uses */
+  channels: z
+    .array(z.int().min(1).max(CHANNEL_MAX))
+    .max(ACCESS_POINT_CHANNELS_MAX)
+    .transform(cleanChannelList)
+    .optional(),
 };
 
-/** A stored marker. Without an id and a position it is dropped. */
+/** Optional text in a stored marker: cleaned, or none if unusable. */
+const optionalTextLenient = (max: number) =>
+  z
+    .string()
+    .transform((v) => cleanOptionalText(v, max))
+    .optional()
+    .catch(undefined);
+
+/** An optional list in a stored marker: cleaned, or none if unusable. */
+const optionalListLenient = <T>(
+  item: z.ZodType<T>,
+  clean: (values: T[]) => T[],
+) =>
+  z
+    .array(z.unknown())
+    .transform((values) => {
+      const list = clean(
+        values.flatMap((v) => {
+          const parsed = item.safeParse(v);
+          return parsed.success ? [parsed.data] : [];
+        }),
+      );
+      return list.length ? list : undefined;
+    })
+    .optional()
+    .catch(undefined);
+
+/**
+ * A stored marker. Without an id and a position it is dropped; a bad
+ * optional field is left out and the rest of the marker kept. Files from
+ * before the optional fields existed load unchanged.
+ */
 export const accessPointSchema = z.object({
   id: z.string().min(1),
   x: finite,
@@ -263,6 +368,11 @@ export const accessPointSchema = z.object({
     .transform((v) => cleanAccessPointNote(v))
     .optional()
     .catch(undefined),
+  model: optionalTextLenient(ACCESS_POINT_MODEL_MAX),
+  ssid: optionalTextLenient(ACCESS_POINT_SSID_MAX),
+  bssids: optionalListLenient(z.string(), cleanBssidList),
+  bands: optionalListLenient(z.number(), cleanBandList),
+  channels: optionalListLenient(z.number(), cleanChannelList),
 });
 
 /** The list in a request: ids must be unique. */
@@ -282,9 +392,77 @@ const accessPointsStrict = z
       seen.add(ap.id);
     });
   })
-  .transform((aps) =>
-    aps.map(({ note, ...ap }) => (note ? { ...ap, note } : ap)),
-  );
+  .transform((aps) => aps.map(compactAccessPoint));
+
+/* ---------- how the access point map is shown ---------- */
+
+const apViewFields = {
+  layer: z.enum(AP_LAYERS),
+  regionOpacity: finite.min(0).max(1),
+  showBoundaries: z.boolean(),
+  showMarkers: z.boolean(),
+  showPoints: z.boolean(),
+  showRoaming: z.boolean(),
+  hiddenAps: z.array(z.string().max(200)).max(HIDDEN_APS_MAX),
+};
+
+/** A stored view: each bad or missing field falls back to its default. */
+const apViewLenient = z
+  .unknown()
+  .optional()
+  .transform((value) => {
+    const view = defaultApView();
+    if (!isRecord(value)) return view;
+    const out: Record<string, unknown> = { ...view };
+    for (const [key, schema] of Object.entries(apViewFields)) {
+      const parsed = schema.safeParse(value[key]);
+      if (parsed.success) out[key] = parsed.data;
+    }
+    return out as unknown as typeof view;
+  });
+
+/* ---------- the report's details ---------- */
+
+const ymdDate = z.union([
+  z.literal(""),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date is YYYY-MM-DD"),
+]);
+
+const shortText = z.string().max(REPORT_SHORT_MAX);
+const longText = z.string().max(REPORT_LONG_MAX);
+const reportInfoFields = {
+  client: shortText,
+  site: shortText,
+  address: shortText,
+  surveyor: shortText,
+  surveyDate: ymdDate,
+  summary: longText,
+  recommendations: longText,
+  notes: longText,
+} satisfies Record<keyof ReportInfo, z.ZodType<string>>;
+
+/** A stored report: each bad or missing field is empty; long text is cut. */
+const reportInfoLenient = z
+  .unknown()
+  .optional()
+  .transform((value): ReportInfo => {
+    const info = defaultReportInfo();
+    if (!isRecord(value)) return info;
+    for (const k of REPORT_SHORT_FIELDS) {
+      if (typeof value[k] === "string") {
+        info[k] = value[k].slice(0, REPORT_SHORT_MAX);
+      }
+    }
+    for (const k of REPORT_LONG_FIELDS) {
+      if (typeof value[k] === "string") {
+        info[k] = value[k].slice(0, REPORT_LONG_MAX);
+      }
+    }
+    if (ymdDate.safeParse(value.surveyDate).success) {
+      info.surveyDate = value.surveyDate as string;
+    }
+    return info;
+  });
 
 /* ---------- settings ---------- */
 
@@ -476,7 +654,13 @@ export const surveyFileSchema = z.object({
   // so a missing value is true; new surveys start without them.
   udpTests: z.boolean().catch(true),
   apMapping: lenientArray(apMappingSchema),
-  accessPoints: lenientArray(accessPointSchema),
+  accessPoints: lenientArray(accessPointSchema).transform((aps) =>
+    aps.map(compactAccessPoint),
+  ),
+  // how the access point map is shown; older files get the defaults
+  apView: apViewLenient,
+  // the Report tab's details; older files get empty ones
+  report: reportInfoLenient,
   nextPointNum: z.int().catch(1),
   dimensions: z
     .object({ width: finite, height: finite })
@@ -570,6 +754,10 @@ export const settingsPatchSchema = z
     apMapping: z.array(z.strictObject(apMappingSchema.shape)),
     /** Replaces the whole list. */
     accessPoints: accessPointsStrict,
+    /** Replaces the whole view. */
+    apView: z.strictObject(apViewFields),
+    /** Replaces the whole report details. */
+    report: z.strictObject(reportInfoFields),
     dimensions: z.strictObject({
       width: finite.positive(),
       height: finite.positive(),
@@ -791,3 +979,26 @@ export function describeIssues(error: z.ZodError): string {
     })
     .join("; ");
 }
+
+/* ---------- the company on reports (data/report-profile.json) ---------- */
+
+const logoField = z
+  .string()
+  .max(Math.ceil((LOGO_MAX_BYTES * 4) / 3) + 64, "the logo is too large")
+  .regex(LOGO_DATA_URL, "the logo must be a PNG or JPEG image")
+  .nullable();
+
+/** PUT /api/report-profile: the whole profile. */
+export const reportProfileSchema = z.strictObject({
+  companyName: z.string().trim().max(COMPANY_NAME_MAX),
+  logo: logoField,
+});
+
+/** The stored file: anything unusable falls back to empty. */
+export const reportProfileFileSchema = z.object({
+  companyName: z
+    .string()
+    .transform((v) => v.trim().slice(0, COMPANY_NAME_MAX))
+    .catch(""),
+  logo: logoField.catch(defaultReportProfile().logo),
+});

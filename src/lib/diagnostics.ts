@@ -298,6 +298,7 @@ export const DOCS_FOR_TAB: Record<string, string> = {
   floorplan: "using-the-app#floor-plan",
   heatmaps: "using-the-app#heat-maps",
   points: "using-the-app#survey-points",
+  report: "using-the-app#report",
 };
 
 export function docsUrl(tab?: string): string {

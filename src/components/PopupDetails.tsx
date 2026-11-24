@@ -1,13 +1,13 @@
 import React from "react";
-import { X, Trash2 } from "lucide-react";
+import { MapPin, Router, X, Trash2 } from "lucide-react";
 import {
   SurveyPoint,
   HeatmapSettings,
   IperfTestProperty,
   SurveyPointActions,
 } from "@/lib/types";
-import { formatMacAddress, snrOf, validNoise } from "@/lib/utils";
-import { apHues, apKeyFor, apNameFor } from "@/lib/apName";
+import { snrOf, validNoise } from "@/lib/utils";
+import { identifyAp } from "@/lib/ap-association";
 import { ApChip } from "./ApChip";
 import { pointName } from "@/lib/point-label";
 import { PointLabel } from "@/components/PointLabel";
@@ -21,6 +21,14 @@ interface PopupDetailsProps {
   point: SurveyPoint | null;
   settings: HeatmapSettings;
   surveyPointActions: SurveyPointActions;
+  /** access point colours (ap-association.ts apPalette) */
+  palette: Map<string, number>;
+  /** put an access point marker on this point's spot */
+  onMarkAsAccessPoint: (point: SurveyPoint) => void;
+  /** open the marker this point's BSSID belongs to */
+  onShowAccessPoint: (id: string) => void;
+  /** move that marker onto this point's spot */
+  onMoveAccessPoint: (id: string, point: SurveyPoint) => void;
   onClose: () => void;
 }
 
@@ -32,12 +40,17 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
   point,
   settings,
   surveyPointActions,
+  palette,
+  onMarkAsAccessPoint,
+  onShowAccessPoint,
+  onMoveAccessPoint,
   onClose,
 }) => {
   if (!point) return null;
 
   const wifi = point.wifiData;
-  const apName = apNameFor(wifi?.bssid, settings.apMapping);
+  // the BSSID it was connected to; null when the system didn't report one
+  const ap = identifyAp(wifi?.bssid, settings.accessPoints, settings.apMapping);
   const color = objectToRGBAString({
     ...getColorAt(wifi.signalStrength / 100, settings.gradient),
     a: 1,
@@ -57,19 +70,12 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
     ["Network", wifi.ssid || "not available"],
     [
       "Access point",
-      wifi.bssid || apName ? (
-        <ApChip
-          key="ap"
-          hue={apHues(
-            settings.surveyPoints.map((p) => p.wifiData.bssid),
-            settings.apMapping,
-          ).get(apKeyFor(wifi.bssid, settings.apMapping))}
-          mono={!apName}
-        >
-          {apName ?? formatMacAddress(wifi.bssid)}
+      ap ? (
+        <ApChip key="ap" hue={palette.get(ap.key)} mono={ap.source === "bssid"}>
+          {ap.name}
         </ApChip>
       ) : (
-        "not available"
+        "not reported"
       ),
     ],
     [
@@ -132,6 +138,46 @@ const PopupDetails: React.FC<PopupDetailsProps> = ({
           </div>
         ))}
       </dl>
+      <div className="flex flex-wrap gap-x-1 border-t px-3 py-1.5">
+        {ap?.markerId ? (
+          // this BSSID already belongs to a marker: show it, or say it is here
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onShowAccessPoint(ap.markerId!)}
+              data-testid="point-show-access-point"
+            >
+              <Router className="h-3.5 w-3.5" />
+              Show access point
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onMoveAccessPoint(ap.markerId!, point)}
+              title={`This measurement was connected to ${ap.name}. Move its marker to this spot.`}
+              data-testid="point-move-access-point"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Move access point here
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onMarkAsAccessPoint(point)}
+            title="Put an access point marker here, with the BSSID, network, band and channel of this measurement"
+            data-testid="point-mark-access-point"
+          >
+            <Router className="h-3.5 w-3.5" />
+            Mark as access point
+          </Button>
+        )}
+      </div>
       <div className="flex items-center justify-between border-t bg-muted/40 px-3 py-2">
         <label className="flex items-center gap-2 text-xs">
           <Switch

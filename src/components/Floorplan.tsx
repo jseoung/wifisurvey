@@ -8,6 +8,7 @@ import {
   Router,
 } from "lucide-react";
 
+import { ApIcon } from "./ApIcon";
 import { useSettings } from "./GlobalSettings";
 import { useAppStatus } from "@/hooks/useAppStatus";
 import { useMacosHelper } from "@/hooks/useMacosHelper";
@@ -17,6 +18,7 @@ import PopupDetails from "@/components/PopupDetails";
 import AccessPointDetails from "@/components/AccessPointDetails";
 import { ZoomPanViewport } from "@/components/ZoomPanViewport";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { getColorAt, objectToRGBAString } from "@/lib/utils-gradient";
 import {
   getDefaultWifiResults,
@@ -26,10 +28,14 @@ import {
 } from "@/lib/utils";
 import { AccessPoint, Gradient, SurveyPoint } from "@/lib/types";
 import {
+  AP_BANDS,
+  CHANNEL_MAX,
   accessPointName,
+  compactAccessPoint,
   drawAccessPointMarker,
   newAccessPoint,
 } from "@/lib/access-points";
+import { apPalette, connectedBssid, identifyAp } from "@/lib/ap-association";
 import { useMeasurement } from "@/hooks/useMeasurement";
 import { useZoomPan } from "@/hooks/useZoomPan";
 import { cn } from "@/lib/utils";
@@ -177,6 +183,13 @@ export default function ClickableFloorplan() {
     (selected?.kind === "ap" &&
       accessPoints.find((ap) => ap.id === selected.id)) ||
     null;
+  // one colour per access point, shared with the maps and the table
+  const palette = apPalette(
+    settings.surveyPoints,
+    accessPoints,
+    settings.apMapping,
+  );
+  const showMarkers = settings.apView.showMarkers;
   // the next click on the plan places an access point (for this plan)
   const [placingOn, setPlacingOn] = useState<string | null>(null);
   const placing = placingOn !== null && placingOn === path;
@@ -281,18 +294,22 @@ export default function ClickableFloorplan() {
       drawPoint(ctx, p, sizes, p.id === selectedId, settings.gradient);
     }
     // access points on top: there are few, and they are what you look for
+    if (!showMarkers) return;
     for (const ap of settings.accessPoints) {
       const at = apDrag?.id === ap.id && apDrag.at ? apDrag.at : ap;
       drawAccessPointMarker(ctx, at.x, at.y, apSize(sizes), {
         label: accessPointName(ap),
         font: sizes.font,
         selected: selectedApId === ap.id,
+        hue: palette.get(`ap:${ap.id}`),
       });
     }
   }, [
     image,
     settings.surveyPoints,
     settings.accessPoints,
+    showMarkers,
+    palette,
     apDrag,
     selectedApId,
     frame.width,
@@ -315,6 +332,7 @@ export default function ClickableFloorplan() {
 
   /** The access point marker under `pt`, if any (they are drawn on top). */
   const hitTestAp = (pt: XY): AccessPoint | undefined => {
+    if (!showMarkers) return undefined; // hidden markers can't be clicked
     const half = apSize(markerSizes(imageWidth, fit, zoom)) / 2;
     const tolerance = Math.max(half * 1.15, 14 / scale);
     let best: AccessPoint | undefined;
@@ -410,6 +428,46 @@ export default function ClickableFloorplan() {
     }));
     select(null);
   };
+
+  /**
+   * A new marker on a measurement's spot, filled in with what the device
+   * was connected to there (only what was actually reported).
+   */
+  const markAsAccessPoint = (point: SurveyPoint) => {
+    const w = point.wifiData;
+    const bssid = connectedBssid(w);
+    const named = identifyAp(w.bssid, [], settings.apMapping);
+    const ap = compactAccessPoint({
+      ...newAccessPoint(accessPoints, point.x, point.y),
+      ...(named?.source === "name" ? { name: named.name } : {}),
+      ssid: w.ssid && !w.ssid.includes("redacted") ? w.ssid : undefined,
+      bssids: bssid ? [bssid] : undefined,
+      bands: (AP_BANDS as readonly number[]).includes(w.band)
+        ? [w.band]
+        : undefined,
+      channels:
+        Number.isInteger(w.channel) &&
+        w.channel >= 1 &&
+        w.channel <= CHANNEL_MAX
+          ? [w.channel]
+          : undefined,
+    });
+    updateSettings((prev) => ({
+      accessPoints: [...prev.accessPoints, ap],
+      ...(prev.apView.showMarkers
+        ? {}
+        : { apView: { ...prev.apView, showMarkers: true } }),
+    }));
+    select({ kind: "ap", id: ap.id });
+  };
+
+  /** Measurements connected to one of a marker's BSSIDs. */
+  const measuredBy = (apId: string) =>
+    settings.surveyPoints.filter(
+      (p) =>
+        identifyAp(p.wifiData.bssid, accessPoints, settings.apMapping)
+          ?.markerId === apId,
+    ).length;
 
   // Pressing a marker drags it instead of panning the plan
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -610,15 +668,35 @@ export default function ClickableFloorplan() {
             onClick={() => {
               select(null);
               setPlacingOn(placing ? null : path);
+              if (!placing && !showMarkers) {
+                updateSettings((prev) => ({
+                  apView: { ...prev.apView, showMarkers: true },
+                }));
+              }
             }}
             disabled={!image}
             aria-pressed={placing}
             data-testid="add-access-point"
-            title="Mark where a router or access point is. It does not change the heat maps."
+            title="Mark where a router or access point is. List its BSSIDs to see where it served the device on the access point map."
           >
             <Router className="h-3.5 w-3.5" />
             {placing ? "Cancel" : "Add access point"}
           </Button>
+          {accessPoints.length > 0 && (
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={showMarkers}
+                onCheckedChange={(v) => {
+                  if (!v && selectedAp) select(null);
+                  updateSettings((prev) => ({
+                    apView: { ...prev.apView, showMarkers: v },
+                  }));
+                }}
+                data-testid="show-access-points"
+              />
+              Show access points
+            </label>
+          )}
         </div>
       </div>
 
@@ -664,6 +742,8 @@ export default function ClickableFloorplan() {
                   <AccessPointDetails
                     key={selectedAp.id}
                     ap={selectedAp}
+                    hue={palette.get(`ap:${selectedAp.id}`)}
+                    measured={measuredBy(selectedAp.id)}
                     onChange={(patch) =>
                       changeAccessPoint(selectedAp.id, patch)
                     }
@@ -675,6 +755,25 @@ export default function ClickableFloorplan() {
                     point={selectedPoint}
                     settings={settings}
                     surveyPointActions={surveyPointActions}
+                    palette={palette}
+                    onMarkAsAccessPoint={markAsAccessPoint}
+                    onShowAccessPoint={(id) => {
+                      if (!showMarkers) {
+                        updateSettings((prev) => ({
+                          apView: { ...prev.apView, showMarkers: true },
+                        }));
+                      }
+                      select({ kind: "ap", id });
+                    }}
+                    onMoveAccessPoint={(id, p) => {
+                      changeAccessPoint(id, { x: p.x, y: p.y });
+                      if (!showMarkers) {
+                        updateSettings((prev) => ({
+                          apView: { ...prev.apView, showMarkers: true },
+                        }));
+                      }
+                      select({ kind: "ap", id });
+                    }}
                     onClose={() => select(null)}
                   />
                 )}
@@ -717,6 +816,12 @@ export default function ClickableFloorplan() {
             />
           )}
         </ZoomPanViewport>
+        {image && (points.length > 0 || accessPoints.length > 0) && (
+          <PlanLegend
+            accessPoints={showMarkers ? accessPoints : []}
+            palette={palette}
+          />
+        )}
       </div>
 
       {measurement.phase !== "idle" && (
@@ -732,6 +837,33 @@ export default function ClickableFloorplan() {
           onRetryWithPassword={retryWithPassword}
         />
       )}
+    </div>
+  );
+}
+
+/** What the dots and squares on the plan are. */
+function PlanLegend({
+  accessPoints,
+  palette,
+}: {
+  accessPoints: readonly AccessPoint[];
+  palette: Map<string, number>;
+}) {
+  return (
+    <div
+      className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground"
+      data-testid="floorplan-legend"
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full border border-black/40 bg-muted-foreground/40" />
+        Measurement (colour shows signal)
+      </span>
+      {accessPoints.map((ap) => (
+        <span key={ap.id} className="flex items-center gap-1.5">
+          <ApIcon hue={palette.get(`ap:${ap.id}`)} className="h-4 w-4" />
+          {accessPointName(ap)}
+        </span>
+      ))}
     </div>
   );
 }

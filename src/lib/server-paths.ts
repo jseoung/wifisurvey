@@ -7,6 +7,7 @@
  *   data/media/<floorplan image>    uploaded floor plan images
  *   data/usage-counts.json          this computer's usage counts setting and
  *                                   random install id (telemetry.ts)
+ *   data/report-profile.json        company name and logo for survey reports
  *
  * Set WIFI_HEATMAPPER_DATA_DIR to move the whole directory (used by the
  * e2e tests so they never touch a developer's real surveys).
@@ -39,6 +40,11 @@ export function getMediaDir(): string {
  */
 export function getUsageCountsPath(): string {
   return path.join(getDataDir(), "usage-counts.json");
+}
+
+/** The company name and logo on survey reports (not part of any survey). */
+export function getReportProfilePath(): string {
+  return path.join(getDataDir(), "report-profile.json");
 }
 
 /** Where the files that ship with the app live (read-only). */

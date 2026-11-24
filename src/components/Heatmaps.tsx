@@ -48,6 +48,7 @@ import HeatmapModal from "./HeatmapModal";
 import { hasSpeedData } from "@/lib/measurement-mode";
 import { labelFontSize, pointValueText } from "@/lib/heatmap-label";
 import { accessPointName, drawAccessPointMarker } from "@/lib/access-points";
+import { ApMapPanel } from "./ApMapPanel";
 
 const logger = getLogger("Heatmaps");
 
@@ -840,6 +841,10 @@ export function Heatmaps() {
           })}
         </div>
       </div>
+
+      {points.length > 0 && (
+        <ApMapPanel points={enabledPoints} radius={radius} />
+      )}
 
       <HeatmapModal
         src={enlarged?.src ?? ""}

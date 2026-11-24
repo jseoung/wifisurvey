@@ -15,6 +15,7 @@ import SettingsEditor from "@/components/SettingsEditor";
 import ClickableFloorplan from "@/components/Floorplan";
 import { Heatmaps } from "@/components/Heatmaps";
 import PointsTable from "@/components/PointsTable";
+import { ReportTab } from "@/components/ReportTab";
 import { HelpMenu } from "@/components/help/HelpMenu";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export const TABS = [
   { id: "floorplan", label: "Floor plan" },
   { id: "heatmaps", label: "Heat maps" },
   { id: "points", label: "Survey points" },
+  { id: "report", label: "Report" },
   { id: "settings", label: "Settings" },
 ] as const;
 export type TabId = (typeof TABS)[number]["id"];
@@ -145,6 +147,9 @@ export default function AppShell() {
             surveyPointActions={surveyPointActions}
             apMapping={settings.apMapping}
           />
+        </Tabs.Content>
+        <Tabs.Content value="report" className="outline-hidden">
+          <ReportTab />
         </Tabs.Content>
       </main>
       <HelpMenu tab={tab} />

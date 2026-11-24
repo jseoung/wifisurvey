@@ -5,6 +5,8 @@
  */
 import { defaultIperfCommands } from "./iperfUtils";
 import { mediaUrlFor } from "./media-url";
+import { defaultApView } from "./ap-view";
+import { defaultReportInfo } from "./report-info";
 import type { Gradient, SurveyDocument, WifiResults } from "./types";
 
 /**
@@ -107,6 +109,8 @@ export function defaultSurvey(floorPlan: string): SurveyDocument {
     iperfServerAdrs: "",
     apMapping: [],
     accessPoints: [],
+    apView: defaultApView(),
+    report: defaultReportInfo(),
     testDuration: 5,
     udpTests: false, // TCP only: half the time per spot
     nextPointNum: 1,

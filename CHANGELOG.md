@@ -13,6 +13,44 @@ _This section follows the precepts of [Keep a Changelog](https://keepachangelog.
   survey and drawn on the floor plan and every heat map, including
   downloaded PNGs. They are pins only: they take no measurement and don't
   change the heat maps.
+* **More on each access point marker.** Besides a name and note, a marker
+  takes the manufacturer and model, network name, BSSIDs (or a prefix
+  ending in `*`), bands and channels. **Mark as access point** in a
+  measured point's details puts a marker on that spot, filled in with what
+  the device was connected to there. Markers are drawn as a white
+  ceiling access point (like a UniFi U6 Pro) whose light ring takes the
+  access point's colour, the floor plan has a legend, and **Show access points** hides or
+  shows them.
+* **Access point map** on the Heat maps tab: which access point served the
+  device where, worked out from the BSSID it was connected to at each
+  measurement (never the strongest one nearby). Layers for signal strength,
+  access point association (shaded areas with boundaries, dashed where they
+  are an estimate), signal with association boundaries, roaming events and
+  access point locations. Roaming events are numbered in the order
+  measured, tell a roam to another access point from a band or radio change
+  on the same one, and flag late roams, ping-pongs and long pauses. A table
+  per access point gives its BSSIDs, bands, channels, share of
+  measurements, signal and roaming events, and can hide it from the map; click
+  one to highlight its measurements.
+  Measurements without a BSSID are counted, never guessed. The view is
+  saved with the survey; files from before load unchanged.
+
+* **Survey report** in Word (.docx) and PDF, on a new **Report** tab. A
+  cover page with the company name and logo, client, site, address, survey
+  date and surveyor, then a summary with the signal figures and findings,
+  the signal heat map, the access points (locations and a table with SSID,
+  BSSIDs, bands, channels and signal), the association and roaming maps
+  with a table of roaming events, every measurement, and the
+  recommendations and notes typed in. The preview shows the report as it
+  prints; **Print or save as PDF** prints it, **Download Word** saves an
+  editable .docx. The company name and logo are kept once for the app
+  (`data/report-profile.json`), the rest with each survey. **Suggest from
+  the findings** drafts recommendations. Adds the `docx` package.
+
+### Changed
+
+* The points table, the CSV's `access_point` column and a point's details
+  name an access point by its marker when a marker lists the BSSID.
 
 ## Version 0.10.0 - 2026-11-05
 

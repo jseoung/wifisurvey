@@ -21,6 +21,8 @@ export const SETTINGS_PATCH_KEYS = [
   "udpTests",
   "apMapping",
   "accessPoints",
+  "apView",
+  "report",
   "dimensions",
   "radiusDivider",
   "maxOpacity",
@@ -50,8 +52,9 @@ export const COPY_PARTS = {
   ],
   /** Access point names */
   apNames: ["apMapping"],
-  /** Heat spot radius, opacity, labels, colours and fixed colour scales */
+  /** Heat spot radius, opacity, labels, colours, fixed colour scales and the access point map view */
   heatmapLook: [
+    "apView",
     "radiusDivider",
     "maxOpacity",
     "minOpacity",

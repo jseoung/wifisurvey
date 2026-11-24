@@ -76,7 +76,7 @@ export async function useSpeedServer(page: Page, server: string) {
 
 export async function gotoTab(
   page: Page,
-  tab: "settings" | "floorplan" | "heatmaps" | "points",
+  tab: "settings" | "floorplan" | "heatmaps" | "points" | "report",
 ) {
   await page.getByTestId(`tab-${tab}`).click();
 }

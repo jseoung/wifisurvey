@@ -1,5 +1,10 @@
-import { apNameFor } from "./apName";
-import { ApMapping, IperfTestProperty, SurveyPoint } from "./types";
+import { identifyAp } from "./ap-association";
+import {
+  AccessPoint,
+  ApMapping,
+  IperfTestProperty,
+  SurveyPoint,
+} from "./types";
 import { snrOf, validNoise } from "./utils";
 
 /** Mbps of a test, or "" (an empty cell) when it did not run. */
@@ -22,6 +27,7 @@ function csvCell(v: unknown): string {
 export function surveyPointsToCsv(
   points: SurveyPoint[],
   apMapping: ApMapping[],
+  accessPoints: readonly AccessPoint[] = [],
 ): string {
   const header = [
     "id",
@@ -53,7 +59,9 @@ export function surveyPointsToCsv(
   const rows = points.map((p) => {
     const w = p.wifiData;
     const i = p.iperfData;
-    const ap = apNameFor(w.bssid, apMapping) ?? "";
+    // a marker's or given name; empty when the BSSID has no name
+    const id = identifyAp(w.bssid, accessPoints, apMapping);
+    const ap = id && id.source !== "bssid" ? id.name : "";
     return [
       p.id,
       p.label ?? "",

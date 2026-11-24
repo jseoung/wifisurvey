@@ -57,13 +57,8 @@ import {
   SurveyPointActions,
 } from "@/lib/types";
 import { getColorAt, objectToRGBAString } from "@/lib/utils-gradient";
-import {
-  formatMacAddress,
-  rssiToPercentage,
-  snrOf,
-  validNoise,
-} from "@/lib/utils";
-import { apHues, apKeyFor, apNameFor } from "@/lib/apName";
+import { rssiToPercentage, snrOf, validNoise } from "@/lib/utils";
+import { apPalette, identifyAp } from "@/lib/ap-association";
 import { ApChip } from "./ApChip";
 import { hasSpeedData } from "@/lib/measurement-mode";
 import { surveyPointsToCsv, downloadText } from "@/lib/exportCsv";
@@ -170,10 +165,10 @@ const SurveyPointsTable: React.FC<SurveyPointsTableProps> = ({
       udpUploadMbps: false,
     });
 
-  const hues = apHues(
-    data.map((p) => p.wifiData.bssid),
-    apMapping,
-  );
+  // the same identity and colour as the markers and the access point map
+  const palette = apPalette(data, settings.accessPoints, apMapping);
+  const apOf = (bssid: string) =>
+    identifyAp(bssid, settings.accessPoints, apMapping);
 
   const rows: Row[] = data.map((point) => ({
     origPoint: point,
@@ -184,7 +179,7 @@ const SurveyPointsTable: React.FC<SurveyPointsTableProps> = ({
     y: point.y,
     ssid: point.wifiData.ssid,
     bssid: point.wifiData.bssid,
-    accessPoint: apNameFor(point.wifiData.bssid, apMapping) ?? "",
+    accessPoint: apOf(point.wifiData.bssid)?.name ?? "",
     rssi: point.wifiData.rssi,
     noise: validNoise(point.wifiData.noise),
     snr: snrOf(point.wifiData),
@@ -298,14 +293,11 @@ const SurveyPointsTable: React.FC<SurveyPointsTableProps> = ({
       header: "Access point",
       meta: { align: "left" },
       cell: ({ row }) => {
-        const { accessPoint, bssid } = row.original;
-        if (!accessPoint && !bssid) return "";
+        const ap = apOf(row.original.bssid);
+        if (!ap) return "";
         return (
-          <ApChip
-            hue={hues.get(apKeyFor(bssid, apMapping))}
-            mono={!accessPoint}
-          >
-            {accessPoint || formatMacAddress(bssid)}
+          <ApChip hue={palette.get(ap.key)} mono={ap.source === "bssid"}>
+            {ap.name}
           </ApChip>
         );
       },
@@ -395,7 +387,7 @@ const SurveyPointsTable: React.FC<SurveyPointsTableProps> = ({
     const name =
       settings.floorplanImageName.replace(/\.[^.]+$/, "") || "survey";
     downloadText(
-      surveyPointsToCsv(data, apMapping),
+      surveyPointsToCsv(data, apMapping, settings.accessPoints),
       `${name}-survey-points.csv`,
     );
   };

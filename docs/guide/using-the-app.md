@@ -1,14 +1,14 @@
 ---
 title: Using the app
-description: Every tab and setting: floor plans, measuring, heat maps and colour scales, survey points.
+description: Every tab and setting: floor plans, measuring, heat maps and colour scales, survey points, reports.
 order: 3
 ---
 
 # Using the app
 
-wifi-heatmapper has four sections, shown as tabs in the header: **Floor
-plan** (where the app opens), **Heat maps**, **Survey points** and
-**Settings**.
+wifi-heatmapper has five sections, shown as tabs in the header: **Floor
+plan** (where the app opens), **Heat maps**, **Survey points**, **Report**
+and **Settings**.
 
 The bar above every tab shows the survey you are working on:
 
@@ -147,15 +147,28 @@ id stays as it is. The measured values can't be edited: a point shows what
 was measured.
 
 **Mark your access points.** Click **Add access point**, then click
-where the router or mesh node is. A dark square with a router icon marks
-it, here and on every heat map, so you can compare where the access
-points are with the coverage you measured. Click the marker to name it
-("Living room", "Upstairs") and add a note, such as the model, how high
-it hangs or which way the antennas point; both save when you click
-elsewhere. Drag a marker to move it, or click **Remove** in its details.
-Escape cancels placing one. A marker is only a pin: it takes no
-measurement and doesn't change the heat maps, so if you move or add an
-access point, measure the spots around it again.
+where the router or mesh node is, or open a measured point's details and
+click **Mark as access point** to put a marker on that spot, filled in with
+the network, BSSID, band and channel it was connected to there. A white
+ceiling access point, drawn like a UniFi U6 Pro seen from below, marks it
+here and on every heat map. Its light ring is in the access point's own
+colour (the same one its area has on the
+[access point map](#access-point-map)). Click the marker to name it
+("Living room", "Upstairs") and fill in what you know: manufacturer and
+model, network name (SSID), its BSSIDs, bands, channels and a note, such
+as how high it hangs. Everything saves when you click elsewhere.
+
+List every BSSID the access point uses (one per band or network), or a
+prefix ending in `*` such as `9e:05:d6:96:e8:*`; measurements connected to
+any of them count as this access point. When a measurement's BSSID already
+belongs to a marker, its details offer **Show access point** to open that
+marker, and **Move access point here** to put the marker on this spot.
+
+Drag a marker to move it, or click **Remove** in its details. Escape
+cancels placing one. **Show access points** hides or shows the markers, and
+the legend under the plan lists them. A marker never changes the signal
+heat maps: if you move or add an access point, measure the spots around it
+again.
 
 On Linux, measurements use the first connected managed Wi-Fi interface,
 ignoring monitor, AP and P2P devices. If the link is disconnected or its
@@ -249,6 +262,75 @@ a caption with the floor plan name, point count and date. An enlarged map
 zooms and pans like the floor plan: the buttons in its corner, Ctrl (⌘) +
 wheel or a pinch, dragging, and **+** / **-** / **0**.
 
+### Access point map
+
+Below the heat maps, the **access point map** shows which access point the
+device was connected to at each spot, and where it roamed from one to
+another. It uses the BSSID each measurement was actually connected to, never
+the strongest one nearby: several access points often broadcast the same
+network name, and a device doesn't always use the closest one.
+
+![Access point map](../images/ap-map.png)
+
+**Layer** picks what it shows:
+
+* **Signal strength**: the signal heat map with the access point markers.
+* **Access point association**: each access point's area, lightly shaded in
+  its colour, with lines between areas served by different access points.
+* **Signal with association boundaries**: the signal heat map with those
+  lines and the measurements on top.
+* **Roaming events**: where the device changed access point, band or radio,
+  numbered in the order measured, with the route you walked.
+* **Access point locations**: the markers, and which access point each
+  measurement used.
+
+An area is the part of the plan nearest to measurements on that access
+point, out to the heat map **Radius**. Further out there is no data, so
+nothing is shaded. Where the nearest measurements are more than half the
+radius away, the shading fades and the boundary is dashed: that line is an
+estimate between measurements, not something measured. The dots are where
+you actually measured; a hollow grey dot had no BSSID.
+
+**Shading** sets how strongly the areas are coloured, and the switches show
+or hide the boundaries, measurements, roaming events and markers. The
+choices are saved with the survey, and the map downloads as a PNG like the
+others.
+
+A roaming event is drawn as an arrow from the last reading on the old access
+point to the first on the new one. A round badge is a roam to another access
+point; a square one is a band change (5 GHz to 2.4 GHz, say) or another radio
+on the same access point. A BSSID counts as the same access point when a
+marker lists it, when it has the same name under **Access point names**, or
+when two unnamed BSSIDs differ only in their last or first byte, which
+usually means two radios of one device. The event list below the map gives
+each one's access points, signal before and after, band, channel and time,
+and flags what deserves a look:
+
+* **Late roam**: the signal was already weak (-76 dBm or below) before the
+  device moved on. Seen often, the device holds on too long ("sticky
+  client").
+* **Ping-pong**: it went straight back to the access point it had just left,
+  usually where two access points overlap a lot.
+* **Long pause between readings**: the device may have reconnected rather
+  than roamed.
+* **Readings without a BSSID in between**: the exact spot is uncertain.
+
+The **Access points** table lists each one with its colour, BSSIDs, network,
+bands, channels, how many measurements used it (and what share of those with
+a BSSID), the average, weakest and strongest signal, and its roaming events.
+Click an access point's row to highlight its measurements: they get a dark
+ring and everything else fades, on any layer, so you can see exactly which
+spots it served. Click it again, or **Show all** above the map, to go back.
+Untick an access point to leave it off the map. Until you name an access
+point, it is shown by its BSSID. **Worth a look** sums up late roams,
+ping-pongs, measurements connected to a distant access point while a marked
+one was much closer, and weak spots.
+
+Some systems don't report the BSSID: macOS only does when the app has
+Location access, and some drivers hide it. Those measurements are counted as
+having no BSSID and left out of the areas and the percentages. The app
+never guesses which access point served them.
+
 ## Survey points
 
 ![Survey points](../images/points.png)
@@ -261,8 +343,57 @@ settings) exactly as the app saves it. The
 **Name** column shows each point's name (its id, such as `Point_3`, until
 you name it; the id column is under **Columns**); click it to rename the
 point, the same way as in its details. Each access point gets its own
-colour in the **Access point** column and in a point's details, so points
-on the same access point are easy to spot. The CSV has it in the `label` column. The
+colour in the **Access point** column and in a point's details (the same
+colour as its marker and its area on the access point map), so points on the
+same access point are easy to spot. The column shows the marker's name when
+a marker lists the BSSID, else its name under **Access point names**, else
+the BSSID; the CSV's `access_point` column has the name. The CSV has it in the `label` column. The
 download and upload columns appear once a point has a speed reading.
 A test that did not run shows as "—" (an empty cell in the CSV); a test
 that ran and got nothing through shows as 0, a real dead spot.
+
+## Report
+
+![Report](../images/report.png)
+
+The **Report** tab makes a survey report for the client, as a Word file or a
+PDF. Fill in the form on the left; the preview on the right shows the report
+exactly as it will print, and follows what you type.
+
+* **Your company**: the company name and logo (PNG or JPEG, at most 512 KB)
+  at the top of every report. They are entered once and kept for the whole
+  app, in `data/report-profile.json`, not in a survey.
+* **This survey**: client, site, address, survey date (the day of the last
+  measurement until you pick one) and surveyor, saved with the survey.
+* **Summary**, **Recommendations** and **Additional notes**: free text. A
+  blank line starts a new paragraph; lines starting with `- ` become a
+  bulleted list. **Suggest from the findings** adds recommendations for what
+  the survey found (weak spots, late roams, ping-pongs, measurements without
+  a BSSID) for you to edit. Sections left empty are left out of the report.
+
+The report has a cover page (logo, company, client, site, date, surveyor),
+then:
+
+1. **Summary**: your summary, the measurement count, average, weakest and
+   strongest signal, how many spots are good (-67 dBm or better) and weak
+   (below -76 dBm), access points, roams and band changes, and the findings
+   from the [access point map](#access-point-map).
+2. **Signal coverage**: the signal heat map with the access points.
+3. **Access points**: where they are, and a table with each one's model,
+   network (SSID), BSSIDs, bands, channels, measurements, signal and roaming
+   events, plus the notes on the markers.
+4. **Access point association and roaming**: the association areas and
+   boundaries, the roaming events map, and a table of every roaming event.
+5. **Measurements**: every measurement in use, in the order taken, with its
+   signal, access point, network, band, channel and speed if measured.
+6. **Recommendations** and **Additional notes**.
+
+The maps always show every access point, whatever is hidden on the Heat maps
+tab, and use the heat maps' radius and colours. Switched-off points are left
+out.
+
+**Download Word (.docx)** saves the report for Word, LibreOffice or Google
+Docs, where you can still edit it; pages are numbered in the footer.
+**Print or save as PDF** opens the print dialog for the preview: choose
+**Save as PDF** (or **Microsoft Print to PDF** on Windows) as the printer.
+
